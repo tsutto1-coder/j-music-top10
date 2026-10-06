@@ -1,0 +1,87 @@
+# J-MUSIC TOP10 を GitHub Actions で手動実行する
+# 使い方: リポジトリの「Actions」タブ → 「J-MUSIC TOP10」→「Run workflow」
+name: J-MUSIC TOP10
+
+on:
+  workflow_dispatch:
+    inputs:
+      make_video:
+        description: "動画(reel.mp4 / feed.mp4)も生成する"
+        type: boolean
+        default: true
+      upload_drive:
+        description: "Googleドライブに保存する"
+        type: boolean
+        default: true
+      demo:
+        description: "デモデータで試す(APIキー不要・履歴は保存しない)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # 順位履歴(data/)をリポジトリに書き戻すため
+
+concurrency:
+  group: music-top10
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # manual_charts/*.csv の更新日をgit履歴から判定するため
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 日本語フォントとffmpegを入れる
+        if: ${{ inputs.make_video }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q fonts-noto-cjk ffmpeg
+
+      - name: Pythonライブラリを入れる
+        run: pip install -r requirements.txt
+
+      - name: ランキング集計・投稿文・動画を生成
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+          OPT_DEMO: ${{ inputs.demo }}
+          OPT_VIDEO: ${{ inputs.make_video }}
+          OPT_DRIVE: ${{ inputs.upload_drive }}
+        run: |
+          ARGS=()
+          [ "$OPT_DEMO" = "true" ]  && ARGS+=(--demo)
+          [ "$OPT_VIDEO" = "true" ] && ARGS+=(--video)
+          [ "$OPT_DRIVE" = "true" ] && ARGS+=(--upload-drive)
+          python music_trend_watch.py "${ARGS[@]}"
+
+      - name: 生成物をActionsにも保存(30日間ダウンロード可)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: outputs-${{ github.run_number }}
+          path: outputs/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 順位履歴をリポジトリに保存
+        if: ${{ success() && !inputs.demo }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/rankings.json data/artists.json
+          if git diff --cached --quiet; then
+            echo "履歴の変更なし"
+          else
+            git commit -m "ランキング履歴を更新 (${{ github.run_number }})"
+            git push
+          fi
