@@ -263,7 +263,102 @@ def pill(text, size, bg, fg=(255, 255, 255), outline=None, pad=(0.55, 0.22)) -> 
 # キャラクター(オリジナル。2倍で描いて縮小しアンチエイリアス)
 # ============================================================
 
-def _face(d, cx, cy, e, blink, mouth_open, ow):
+def _heart(d, cx, cy, size, fill, outline=None, width=1):
+    pts = []
+    for k in range(48):
+        t = 2 * math.pi * k / 48
+        x = 16 * math.sin(t) ** 3
+        y = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
+        pts.append((cx + x / 17 * size, cy - y / 17 * size))
+    d.polygon(pts, fill=fill, outline=outline, width=width)
+
+
+def _face_gekiga(d, cx, cy, e, mouth_open, ow):
+    """劇画顔: 太い眉・三白眼・おでこと頬の縦線・汗・食いしばった歯"""
+    o = COL["out"]
+    lw = max(int(e * 0.09), 2)       # 輪郭線(顔の大きさに合わせる)
+    hw = max(int(e * 0.055), 1)      # 影の線
+    # おでこの縦線(青ざめる影)
+    for k in range(-3, 4):
+        x = cx + k * 0.28 * e
+        d.line([(x, cy - 1.55 * e), (x, cy - 1.05 * e - abs(k) * 0.04 * e)], fill=o, width=hw)
+    for sx in (-1, 1):
+        ex = cx + sx * e
+        # 眉(内側が下がった険しい眉)
+        d.polygon([(ex - sx * 0.58 * e, cy - 0.48 * e), (ex + sx * 0.60 * e, cy - 0.98 * e),
+                   (ex + sx * 0.52 * e, cy - 1.18 * e), (ex - sx * 0.62 * e, cy - 0.72 * e)], fill=o)
+        # 鋭い目(つり目のアーモンド形 + 小さな黒目 = 三白眼)
+        eye = [(ex - sx * 0.55 * e, cy - 0.08 * e), (ex + sx * 0.05 * e, cy - 0.40 * e),
+               (ex + sx * 0.58 * e, cy - 0.30 * e), (ex + sx * 0.02 * e, cy + 0.24 * e)]
+        d.polygon(eye, fill=(255, 255, 255))
+        d.line(eye[:3], fill=o, width=lw * 2, joint="curve")   # 上まぶたは太く
+        d.line(eye[2:] + [eye[0]], fill=o, width=lw)
+        pr = 0.10 * e
+        px, py = ex + sx * 0.02 * e, cy - 0.10 * e
+        d.ellipse((px - pr, py - pr, px + pr, py + pr), fill=o)
+        # 頬の縦線
+        for k in range(3):
+            x = ex + sx * (0.02 + k * 0.18) * e
+            d.line([(x, cy + 0.42 * e), (x, cy + 0.80 * e)], fill=o, width=hw)
+    # 汗
+    sx_, sy_ = cx + 1.60 * e, cy - 0.75 * e
+    sr = 0.26 * e
+    d.polygon([(sx_, sy_ - sr * 2.2), (sx_ - sr * 0.92, sy_ - sr * 0.3), (sx_ + sr * 0.92, sy_ - sr * 0.3)],
+              fill=(150, 215, 255))
+    d.ellipse((sx_ - sr, sy_ - sr, sx_ + sr, sy_ + sr), fill=(150, 215, 255))
+    d.line([(sx_ - sr * 0.95, sy_ - sr * 0.2), (sx_, sy_ - sr * 2.2), (sx_ + sr * 0.95, sy_ - sr * 0.2)],
+           fill=o, width=hw)
+    d.arc((sx_ - sr, sy_ - sr, sx_ + sr, sy_ + sr), -10, 190, fill=o, width=hw)
+    d.ellipse((sx_ - sr * 0.45, sy_ - sr * 0.45, sx_ - sr * 0.05, sy_ - sr * 0.05), fill=(255, 255, 255))
+    # 口: 食いしばった歯(開けると叫ぶ口)
+    my = cy + 1.02 * e
+    mw, mh = (0.66 * e, 0.36 * e) if mouth_open else (0.56 * e, 0.24 * e)
+    if mouth_open:
+        d.rounded_rectangle((cx - mw, my - mh, cx + mw, my + mh), radius=int(0.1 * e), fill=(110, 20, 50),
+                            outline=o, width=lw)
+        ix = mw * 0.10
+        d.rectangle((cx - mw + ix, my - mh * 0.78, cx + mw - ix, my - mh * 0.22), fill=(255, 255, 255))
+        d.rectangle((cx - mw + ix, my + mh * 0.30, cx + mw - ix, my + mh * 0.78), fill=(255, 255, 255))
+    else:
+        d.rounded_rectangle((cx - mw, my - mh, cx + mw, my + mh), radius=int(0.08 * e), fill=(255, 255, 255),
+                            outline=o, width=lw)
+        d.line([(cx - mw, my), (cx + mw, my)], fill=o, width=hw)
+    for k in (-2, -1, 0, 1, 2):
+        x = cx + k * mw * 0.36
+        d.line([(x, my - mh), (x, my + mh)], fill=o, width=hw)
+
+
+def _face_dere(d, cx, cy, e, mouth_open, ow):
+    """デレ顔: ハートの目・斜線入りの赤面・ふにゃっとした口・ハートマーク"""
+    o = COL["out"]
+    for sx in (-1, 1):
+        ex = cx + sx * e
+        _heart(d, ex, cy, 0.52 * e, (255, 60, 120), o, max(int(e * 0.08), 2))
+        d.ellipse((ex - 0.22 * e, cy - 0.26 * e, ex - 0.06 * e, cy - 0.10 * e), fill=(255, 220, 235))
+        bx, by = ex + sx * 0.40 * e, cy + 0.66 * e
+        d.ellipse((bx - 0.42 * e, by - 0.20 * e, bx + 0.42 * e, by + 0.20 * e), fill=(255, 120, 155))
+        for k in (-1, 0, 1):
+            x = bx + k * 0.22 * e
+            d.line([(x - 0.06 * e, by + 0.12 * e), (x + 0.08 * e, by - 0.12 * e)], fill=(225, 50, 100),
+                   width=max(ow // 2, 2))
+    my = cy + 0.95 * e
+    if mouth_open:
+        d.chord((cx - 0.45 * e, my - 0.30 * e, cx + 0.45 * e, my + 0.45 * e), 0, 180, fill=(110, 20, 50),
+                outline=o, width=ow)
+        d.chord((cx - 0.26 * e, my + 0.08 * e, cx + 0.26 * e, my + 0.40 * e), 0, 180, fill=(255, 110, 140))
+    else:  # 「ω」の口
+        lw = max(int(e * 0.09), 2)
+        d.arc((cx - 0.50 * e, my - 0.30 * e, cx, my + 0.22 * e), 0, 180, fill=o, width=lw)
+        d.arc((cx, my - 0.30 * e, cx + 0.50 * e, my + 0.22 * e), 0, 180, fill=o, width=lw)
+    _heart(d, cx + 1.55 * e, cy - 1.05 * e, 0.36 * e, (255, 80, 140), o, max(ow // 2, 2))
+    _heart(d, cx + 1.15 * e, cy - 1.55 * e, 0.22 * e, (255, 140, 180), o, max(ow // 2, 2))
+
+
+def _face(d, cx, cy, e, blink, mouth_open, ow, face="normal"):
+    if face == "gekiga":
+        return _face_gekiga(d, cx, cy, e, mouth_open, ow)
+    if face == "dere":
+        return _face_dere(d, cx, cy, e, mouth_open, ow)
     o = COL["out"]
     rx, ry = 0.42 * e, 0.55 * e
     for sx in (-1, 1):
@@ -308,7 +403,7 @@ def _feet(d, cx, y, gap, r, ow, col=(255, 255, 255)):
                   fill=col, outline=COL["out"], width=ow)
 
 
-def draw_character(cid: str, S: int, mouth: bool, blink: bool, arms: str) -> Image.Image:
+def draw_character(cid: str, S: int, mouth: bool, blink: bool, arms: str, face: str = "normal") -> Image.Image:
     W, H = S * 2, int(S * 2 * 1.3)
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -345,7 +440,7 @@ def draw_character(cid: str, S: int, mouth: bool, blink: bool, arms: str) -> Ima
               width=int(ow * 1.5))
         # 顔の下地(読みやすくするための明るい楕円)
         d.ellipse((cx - r * 0.72, cy - r * 0.42, cx + r * 0.72, cy + r * 0.72), fill=(236, 240, 248))
-        _face(d, cx, cy, W * 0.10, blink, mouth, ow)
+        _face(d, cx, cy, W * 0.10, blink, mouth, ow, face)
 
     elif cid == "reco":
         cx, cy, r = W * 0.5, H * 0.42, W * 0.31
@@ -367,7 +462,7 @@ def draw_character(cid: str, S: int, mouth: bool, blink: bool, arms: str) -> Ima
         lr = r * 0.56
         d.ellipse((cx - lr, cy - lr, cx + lr, cy + lr), fill=(50, 190, 255), outline=o, width=ow)
         d.ellipse((cx - W * 0.012, cy - lr * 0.72 - W * 0.012, cx + W * 0.012, cy - lr * 0.72 + W * 0.012), fill=o)
-        _face(d, cx, cy - lr * 0.12, W * 0.072, blink, mouth, ow)
+        _face(d, cx, cy - lr * 0.12, W * 0.072, blink, mouth, ow, face)
 
     else:  # onpu
         yel, dyel = (255, 200, 40), (225, 150, 20)
@@ -389,7 +484,7 @@ def draw_character(cid: str, S: int, mouth: bool, blink: bool, arms: str) -> Ima
         d.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=yel, outline=o, width=ow)
         d.arc((cx - rx * 0.8, cy - ry * 0.8, cx + rx * 0.8, cy + ry * 0.8), 200, 250, fill=(255, 245, 200),
               width=int(ow * 1.6))
-        _face(d, cx, cy - ry * 0.15, W * 0.085, blink, mouth, ow)
+        _face(d, cx, cy - ry * 0.15, W * 0.085, blink, mouth, ow, face)
 
     return img.resize((S, int(S * 1.3)), Image.LANCZOS)
 
@@ -736,8 +831,9 @@ class SFX:
 
 class Scene:
     def __init__(self, dur, draw=None, lines=(), mode=lambda t: "idle", sfx=(), light_speed=1.0,
-                 confetti=False, post=None):
+                 confetti=False, post=None, faces=None):
         self.dur, self.draw, self.lines, self.mode = dur, draw, list(lines), mode
+        self.faces = faces  # (t, キャラ番号) -> "normal" / "gekiga"(劇画顔) / "dere"(デレ顔)
         self.sfx, self.light_speed, self.confetti, self.post = list(sfx), light_speed, confetti, post
 
 
@@ -845,6 +941,7 @@ def build_scenes(items, meta, w, h, L):
             if t > 0.5:
                 paste(frame, sub, (w - sub.width) / 2, zone_mid + top3.height * 0.35, alpha=ease_out((t - 0.5) / 0.2))
         scenes.append(Scene(T_TOP3, draw_top3, mode=all_cheer_until(1.2),
+                            faces=lambda t, ci: "gekiga" if ci == ONPU and t >= 1.3 else "normal",
                             lines=[(0.3, 1.3, MIC, "いよいよTOP3の発表！"), (1.3, T_TOP3, ONPU, "ドキドキ…！")],
                             sfx=[("chime", 0.05), ("whoosh", 0.0)]))
 
@@ -863,14 +960,55 @@ def build_scenes(items, meta, w, h, L):
     # ---- ドラムロール → 1位 ----
     if n >= 1:
         drum = deco_text("第1位は…", 150 * u, (255, 246, 170), (240, 150, 20))
+        # 劇画顔のアップ(コマ割り風カットイン)
+        cut_y = zone_mid + drum.height * 0.15
+        pw = int(w * 0.29)
+        ph = int(min(h * 0.135, h * L["bubble_top"] - cut_y - 40 * u))  # 吹き出しに重ならない高さ
+        face_box = {"mic": (0.50, 0.25, 0.66), "reco": (0.50, 0.36, 0.52), "onpu": (0.46, 0.62, 0.72)}
+        panels = []
+        for c in CHARS:
+            big = draw_character(c["id"], int(pw * 1.9), True, False, "down", "gekiga")
+            fx, fy, fw = face_box[c["id"]]
+            cw_ = big.width * fw
+            ch_ = cw_ * ph / pw
+            crop = big.crop((int(big.width * fx - cw_ / 2), int(big.height * fy - ch_ / 2),
+                             int(big.width * fx + cw_ / 2), int(big.height * fy + ch_ / 2))).resize((pw, ph), Image.LANCZOS)
+            pan = Image.new("RGBA", (pw, ph), c["color"] + (255,))
+            pd = ImageDraw.Draw(pan)
+            for k in range(0, pw + ph, int(14 * u)):  # 背景の斜線トーン
+                pd.line([(k, 0), (k - ph, ph)], fill=tuple(int(v * 0.8) for v in c["color"]), width=max(int(4 * u), 2))
+            pan.alpha_composite(crop)
+            pd.rectangle((0, 0, pw - 1, ph - 1), outline=(255, 255, 255), width=max(int(7 * u), 3))
+            pd.rectangle((0, 0, pw - 1, ph - 1), outline=COL["out"], width=max(int(3 * u), 2))
+            panels.append(pan.rotate(-3 if len(panels) != 1 else 2, expand=True, resample=Image.BICUBIC))
 
         def draw_drum(frame, t):
+            # 劇画風の集中線(2フレームごとにランダムに描き直してチラつかせる)
+            r = random.Random(int(t * FPS) // 2)
+            d = ImageDraw.Draw(frame)
+            cx, cy = w / 2, (zone_mid + h * L["feet"]) / 2
+            R = math.hypot(w, h)
+            for _ in range(70):
+                a = r.uniform(0, 2 * math.pi)
+                r0 = r.uniform(0.32, 0.55) * min(w, h)
+                wd = r.uniform(0.004, 0.012)
+                p0 = (cx + r0 * math.cos(a), cy + r0 * math.sin(a))
+                p1 = (cx + R * math.cos(a - wd), cy + R * math.sin(a - wd))
+                p2 = (cx + R * math.cos(a + wd), cy + R * math.sin(a + wd))
+                d.polygon([p0, p1, p2], fill=(205, 195, 240))
             sc = 1 + 0.05 * math.sin(t * 18)
             jx = math.sin(t * 47) * 4 * u
-            paste(frame, drum, (w - drum.width) / 2 + jx, zone_mid - drum.height / 2, scale=sc)
-        scenes.append(Scene(T_DRUM, draw_drum, mode=lambda t: "shake",
+            lift = ease_out((t - 0.9) / 0.25) * drum.height * 0.55  # カットインの前に文字が上へ
+            paste(frame, drum, (w - drum.width) / 2 + jx, zone_mid - drum.height / 2 - lift, scale=sc)
+            for k, pan in enumerate(panels):
+                st = 1.0 + k * 0.22
+                if t < st:
+                    continue
+                x = w * (0.035 + k * 0.322) + math.sin(t * 40 + k) * 3 * u
+                paste(frame, pan, x, cut_y, scale=lerp(1.6, 1.0, ease_out((t - st) / 0.15)))
+        scenes.append(Scene(T_DRUM, draw_drum, mode=lambda t: "shake", faces=lambda t, ci: "gekiga",
                             lines=[(0.2, T_DRUM, ONPU, "ドゥルルルルル…！")], light_speed=4.0,
-                            sfx=[("drumroll", 0.05)]))
+                            sfx=[("drumroll", 0.05), ("pop", 1.0), ("pop", 1.22), ("pop", 1.44)]))
 
         it = items[0]
         hit = clean(it.get("hitokoto")) or quick_line(it)
@@ -881,6 +1019,8 @@ def build_scenes(items, meta, w, h, L):
         scenes.append(Scene(
             T_FIRST, rank_board(0, it, "gold", COL["gold"], big=True, t_card=0.45),
             mode=all_cheer_until(2.6, "idle"), confetti=True, post=flash,
+            # 1位発表でみんなデレ顔 → オンプは「おめでとう」でもう一度デレる
+            faces=lambda t, ci: "dere" if t < 1.6 or (ci == ONPU and t >= 7.0) else "normal",
             lines=[(0.5, 3.2, MIC, f"第1位は{clean(it.get('artist'))}！"), (3.2, 7.0, RECO, hit),
                    (7.0, T_FIRST, ONPU, "おめでとう〜！！")],
             sfx=[("crash", 0.0), ("fanfare", 0.05)]))
@@ -921,14 +1061,17 @@ class Cast:
         self.feet = h * L["feet"]
         self.cache = {}
 
-    def sprite(self, ci, mouth, blink, arms):
-        k = (ci, mouth, blink, arms)
+    def sprite(self, ci, mouth, blink, arms, face="normal"):
+        if face != "normal":
+            blink = False
+        k = (ci, mouth, blink, arms, face)
         if k not in self.cache:
-            self.cache[k] = draw_character(CHARS[ci]["id"], self.S, mouth, blink, arms)
+            self.cache[k] = draw_character(CHARS[ci]["id"], self.S, mouth, blink, arms, face)
         return self.cache[k]
 
-    def draw(self, frame, t, gt, mode, speaker, line_t):
+    def draw(self, frame, t, gt, mode, speaker, line_t, faces=None):
         for ci, c in enumerate(CHARS):
+            face = (faces(t, ci) if faces else None) or "normal"
             ph = ci * 1.7
             talking = speaker == ci and line_t is not None
             mouth = talking and (int(gt * 9 + ci) % 2 == 0) and line_t < 2.5
@@ -943,14 +1086,13 @@ class Cast:
                 arms = "up" if int(gt * 3.5 + ci) % 2 == 0 else "down"
             elif mode == "shake":
                 dx = math.sin(gt * 50 + ph) * self.S * 0.02
-                blink = True
             elif mode == "enter":
                 p = (t - ci * 0.18) / 0.7
                 dy -= (1 - ease_bounce(p)) * self.h * 0.6
             if talking and line_t < 0.18:  # 話し始めにぴょこっと跳ねる
                 dy -= math.sin(line_t / 0.18 * math.pi) * self.S * 0.08
                 arms = "up" if mode != "shake" else arms
-            spr = self.sprite(ci, mouth, blink, arms)
+            spr = self.sprite(ci, mouth, blink, arms, face)
             paste(frame, spr, c["x"] * self.w - spr.width / 2 + dx, self.feet - spr.height + dy + self.S * 0.03)
 
 
@@ -1046,7 +1188,7 @@ def render(items, meta, out_path: Path, size, kind, sfx_on=True):
                     sc.draw(frame, t)
                 ln = current_line(sc.lines, t)
                 speaker, line_t = (ln[1], t - ln[0]) if ln else (None, None)
-                cast.draw(frame, t, gt, sc.mode(t), speaker, line_t)
+                cast.draw(frame, t, gt, sc.mode(t), speaker, line_t, sc.faces)
                 if ln:
                     nvis = int(line_t * TYPE_CPS) + 1
                     b = bubble.render(ln[2], min(nvis, len(ln[2])), ln[1])
@@ -1082,10 +1224,48 @@ def make_videos(out_dir: Path, only: str | None = None, sfx_on: bool = True) -> 
     return outs
 
 
+POSES = {  # ファイル名: (口を開ける, 目を閉じる, 腕, 顔)
+    "normal": (False, False, "down", "normal"),
+    "talk": (True, False, "down", "normal"),
+    "cheer": (True, False, "up", "normal"),
+    "smile": (False, True, "down", "normal"),
+    "wave": (False, False, "up", "normal"),
+    "gekiga": (False, False, "down", "gekiga"),      # 劇画顔(食いしばり)
+    "gekiga_shout": (True, False, "up", "gekiga"),   # 劇画顔(叫ぶ)
+    "dere": (False, False, "down", "dere"),          # デレ顔
+    "dere_cheer": (True, False, "up", "dere"),       # デレ顔(バンザイ)
+}
+
+
+def export_characters(dest: Path, size: int = 1200) -> list[Path]:
+    """キャラクターを1体ずつ背景透過PNGで書き出す(アイコン・サムネ・グッズ用)。
+    size = 横幅(px)。高さは横幅の1.3倍。余白は自動でトリミング"""
+    dest.mkdir(parents=True, exist_ok=True)
+    out = []
+    for c in CHARS:
+        for pose, (mouth, blink, arms, face) in POSES.items():
+            img = trim(draw_character(c["id"], size, mouth, blink, arms, face))
+            pad = int(size * 0.04)
+            canvas = Image.new("RGBA", (img.width + pad * 2, img.height + pad * 2), (0, 0, 0, 0))
+            canvas.alpha_composite(img, (pad, pad))
+            p = dest / f"{c['id']}_{pose}.png"
+            canvas.save(p, optimize=True)
+            out.append(p)
+    print(f"[info] キャラクター画像 {len(out)} 枚を書き出しました: {dest}")
+    return out
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("out_dir", help="ranking.json があるフォルダ(例: outputs/2026-10-06)")
+    ap.add_argument("out_dir", help="ranking.json があるフォルダ(例: outputs/2026-10-06)。"
+                                    "--characters のときは画像の保存先")
     ap.add_argument("--only", choices=list(SIZES))
     ap.add_argument("--no-sfx", action="store_true", help="効果音を入れない(無音)")
+    ap.add_argument("--characters", action="store_true",
+                    help="動画は作らず、キャラクターを1体ずつ背景透過PNGで書き出す")
+    ap.add_argument("--char-size", type=int, default=1200, help="キャラクター画像の横幅(px)")
     a = ap.parse_args()
-    make_videos(Path(a.out_dir), a.only, not a.no_sfx)
+    if a.characters:
+        export_characters(Path(a.out_dir), a.char_size)
+    else:
+        make_videos(Path(a.out_dir), a.only, not a.no_sfx)
