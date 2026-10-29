@@ -581,11 +581,14 @@ ANALYSIS_SYSTEM = """あなたは邦楽メディア「J-MUSIC TOP10」の編集A
 - 歌詞は著作物なので一切引用しない
 - タイアップはMV説明文に明記がある場合のみ。なければ null
 - 確認できないことは推測せず null
+- 動画ではオリジナルキャラクター(マイク型の司会「マイクン」、音符型の盛り上げ役「オンプ」)が
+  各曲を紹介するので、そのセリフ quick_line も作る。10〜20文字、明るい話し言葉、事実に基づく
+  (例:「有線で1位の大躍進！」「配信チャートでも上位だ！」)。歌詞の引用・絵文字は禁止
 
 出力はJSON配列のみ:
 [{"key": "入力と同じ", "genre": "J-POP / ロック / ヒップホップ / アニソン / ボカロ / アイドル など",
   "tieup": "タイアップ or null", "keywords": ["2〜4語"],
-  "hitokoto": "15〜40文字の一言分析(データに基づく)"}]"""
+  "hitokoto": "15〜40文字の一言分析(データに基づく)", "quick_line": "10〜20文字のキャラのセリフ"}]"""
 
 
 def analyze_top(top: list[dict], source_labels: dict) -> None:
@@ -600,7 +603,8 @@ def analyze_top(top: list[dict], source_labels: dict) -> None:
     for s in top:
         a = got.get(s["key"], {})
         s.update({"genre": a.get("genre"), "tieup": a.get("tieup"),
-                  "keywords": a.get("keywords") or [], "hitokoto": a.get("hitokoto") or ""})
+                  "keywords": a.get("keywords") or [], "hitokoto": a.get("hitokoto") or "",
+                  "quick_line": a.get("quick_line") or ""})
 
 # ============================================================
 # 5. 順位変動
@@ -737,36 +741,24 @@ def render_instagram(top, ctx) -> str:
 
 
 def render_tiktok(top, ctx) -> str:
-    """縦型動画の台本(テロップ・尺)とキャプション"""
+    """reel.mp4(カウントダウン番組風の動画)に合わせた投稿用の説明とキャプション"""
     n, d = len(top), ctx["date_s"]
-    t = 0.0
-
-    def span(sec: float) -> str:
-        nonlocal t
-        a, t = t, t + sec
-        return f"[{int(a)//60}:{int(a)%60:02d}-{int(t)//60}:{int(t)%60:02d}]"
-
-    out = ["■ TikTok投稿用(縦型 9:16 / カウントダウン形式)", "",
-           "── 動画台本(テロップ案と尺の目安) ──",
-           f"{span(3)} 冒頭フック",
-           f"　テロップ: 「最新 邦楽TOP{n}」「1位はあの曲…!」 / {d}"]
-    rest = list(enumerate(top[3:], start=4))
-    for i, c in reversed(rest):
-        out.append(f"{span(1.5)} {i}位 テロップ: {name(c)} {move_tag(c)}")
-    for i in podium_order(top):
-        c = top[i]
-        out += [f"{span(6)} {rank_label(i)}",
-                f"　テロップ1: {name(c)} {move_tag(c)}",
-                f"　テロップ2: {c['hitokoto']}"]
-    out += [f"{span(3)} 締め",
-            "　テロップ: 「全曲のMVはプロフィールから」「フォローで最新ランキングをチェック」",
-            f"(合計 約{int(t)}秒)", "",
-            "── 音源について ──",
-            "BGMはTikTokアプリの楽曲ライブラリから公式音源を選んで設定してください(1位の曲がおすすめ)。",
-            "MVの映像や音声を切り出して使うのは権利上NGです。ジャケット画像も使わず、文字と背景で構成してください。",
-            "※ビジネスアカウントでは商用利用可の音源しか使えない場合があります。", "",
-            "── キャプション ──",
-            f"最新 邦楽TOP{n}({d})🎧 あなたの推し曲は何位?コメントで教えて!", ""]
+    out = ["■ TikTok投稿用", "",
+           "動画は reel.mp4(縦型 9:16 / 約55秒)をそのまま投稿してください。", "",
+           "── 動画の構成 ──",
+           "・オープニング: マイクン・レコ・オンプが登場して番組スタート",
+           *([f"・{n}位〜4位: テンポよく発表(キャラのひとことリアクション付き)"] if n > 3 else []),
+           "・「いよいよTOP3!」→ 3位・2位: レコがデータで解説",
+           "・ドラムロール「第1位は…」→ 1位: 紙吹雪とファンファーレ",
+           "・エンディング: フォローの呼びかけ", "",
+           "── 音について ──",
+           "動画には控えめな効果音(オリジナル合成音)だけが入っています。",
+           "BGMはTikTokアプリの楽曲ライブラリから公式音源を選んで重ねてください(1位の曲がおすすめ)。",
+           "BGMを主役にしたい場合は、アプリの音量調整で「オリジナル音源」を下げてください。",
+           "MVの映像・音声・ジャケット画像は権利上使わない構成にしています。",
+           "※ビジネスアカウントでは商用利用可の音源しか使えない場合があります。", "",
+           "── キャプション ──",
+           f"最新 邦楽TOP{n}({d})🎧 あなたの推し曲は何位?コメントで教えて!", ""]
     out += [f"{i + 1}位 {name(c)}" for i, c in enumerate(top)]
     out += ["", f"※{short_credit(ctx)}", "", CONFIG["tiktok_hashtags"]]
     return "\n".join(out)
@@ -829,7 +821,7 @@ def render_digest(top, ctx) -> str:
         lines += ["", f"▶️ MVを連続再生してチェック: {pl}"]
     lines += ["", "各ファイルを確認してコピペ投稿してください:",
               "x.txt / threads.txt / instagram.txt / tiktok.txt / note.md",
-              "動画: reel.mp4(縦型9:16)/ feed.mp4(4:5)※無音。BGMは各アプリの公式音源を付けてください"]
+              "動画: reel.mp4(縦型9:16)/ feed.mp4(4:5)※効果音のみ。BGMは各アプリの公式音源を重ねてください"]
     return "\n".join(lines)
 
 # ============================================================
@@ -959,6 +951,12 @@ DEMO_SOURCES = [
         (3, "Starlight Code", "POLARIS7"))},
 ]
 DEMO_NOT_JPOP = {"LUMINA"}  # デモ用: 海外グループとして除外される例
+DEMO_QUICK = {
+    "線路沿い": "ロングヒットで今回も圏内！", "Midnight Convenience": "TikTok発でじわじわ来てる！",
+    "あかね色の約束": "アニメ効果で底堅い！", "まばたき": "有線から火がついた新星！",
+    "祝祭": "お店で流れてるのはこの曲！", "深海メモリー": "配信でも合算でも安定！",
+    "Starlight Code": "ダンス動画で急上昇！",
+}
 DEMO_TEXT = {
     "春雷": ("J-POP", "ドラマ『夜明けの診療所』主題歌(架空)", ["ドラマ主題歌", "疾走感"],
            "合算チャート1位に加えApple Musicでも首位、全方位で強い"),
@@ -1043,6 +1041,7 @@ def main():
         for i, c in enumerate(top):
             g, tie, kw, hito = DEMO_TEXT.get(c["title"], ("J-POP", None, [], "複数チャートで上位"))
             c.update({"genre": g, "tieup": tie, "keywords": kw, "hitokoto": hito,
+                      "quick_line": DEMO_QUICK.get(c["title"], ""),
                       "video_id": f"demo{i + 1}", "url": f"https://www.youtube.com/watch?v=demo{i + 1}",
                       "views": 3_000_000 // (i + 1)})
         rankings = {"2026-09-29": [merged[k]["key"] for k in (1, 0, 3, 2, 6, 5, 8)]}
